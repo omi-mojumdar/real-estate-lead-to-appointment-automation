@@ -1,0 +1,700 @@
+{
+  "name": "Real Estate Lead-to-Appointment Automation System",
+  "nodes": [
+    {
+      "parameters": {
+        "events": [
+          "invitee.created"
+        ]
+      },
+      "type": "n8n-nodes-base.calendlyTrigger",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        48
+      ],
+      "id": "2ba1d986-329c-4531-b313-a83d40dcc745",
+      "name": "📅 Booking Received",
+      "webhookId": "4466ee0e-05a9-4762-bf18-edffd11c59bc",
+      "retryOnFail": true,
+      "credentials": {
+        "calendlyOAuth2Api": {
+          "id": "FBbfjwvwowjYKOVS",
+          "name": "Calendly account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.payload.email }}",
+        "subject": "=Your appointment is confirmed, {{ $json.payload.name }}!",
+        "emailType": "text",
+        "message": "=Hi {{ $json.payload.name }},  Your appointment has been confirmed! 🎉  We look forward to speaking with you soon.  Need to reschedule? {{ $json.payload.reschedule_url }} Need to cancel? {{ $json.payload.cancel_url }}  Best regards, Real Estate Team",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        48
+      ],
+      "id": "45824bdf-19f7-42ed-9713-663fbf5bb681",
+      "name": "📧 Gmail — Confirm Booking",
+      "webhookId": "0d679318-5f59-47a9-ac89-b4ff2f2a3c15",
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iqkC2aAcW2qbjEOW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0CHPUH7A4S",
+          "mode": "list",
+          "cachedResultName": "real-estate-leads"
+        },
+        "text": "=📅 *New Appointment Booked!*  *Name:* {{ $('📅 Booking Received').item.json.payload.name }} *Email:* {{ $('📅 Booking Received').item.json.payload.email }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1568,
+        48
+      ],
+      "id": "69ab8635-24f2-428b-9470-17e9f8428cb0",
+      "name": "💬 Slack — Booking Alert",
+      "webhookId": "efa49ff8-242c-4117-8368-0582b603ce60",
+      "retryOnFail": true,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "U1Tchg9SlaKO271D",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "email": "={{ $('📅 Booking Received').first().json.payload.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "hs_lead_status",
+                "value": "CONNECTED"
+              }
+            ]
+          },
+          "firstName": "={{ $('📅 Booking Received').first().json.payload.name.split(' ')[0] }}",
+          "lastName": "={{ $('📅 Booking Received').first().json.payload.name.split(' ')[1] }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.3,
+      "position": [
+        1792,
+        48
+      ],
+      "id": "bcaa966e-55b2-4049-b2cd-77dc2af6300c",
+      "name": "🏠 HubSpot — Mark Connected",
+      "retryOnFail": true,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "ioFNTtEU7XHVyZLN",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "propertyinquiryform",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        -128,
+        -384
+      ],
+      "id": "57b163ca-c03c-4e52-98a3-c10b93b990c0",
+      "name": "📥 Lead Capture",
+      "webhookId": "75e174ac-aedc-4ccd-b45d-094d22a009b2",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const fields = $input.first().json.body.data.fields;\n\n// Helper: get text value by label\nconst get = (label) => {\n  const f = fields.find(f => f.label === label);\n  if (!f) return '';\n  \n  // Dropdown: value is an ID → look up text from options\n  if (f.type === 'DROPDOWN' || f.type === 'MULTIPLE_CHOICE' || f.type === 'CHECKBOXES') {\n    if (!f.value || f.value.length === 0) return '';\n    const selectedId = Array.isArray(f.value) ? f.value[0] : f.value;\n    const option = f.options.find(o => o.id === selectedId);\n    return option ? option.text : selectedId;\n  }\n  \n  return f.value || '';\n};\n\nconst email     = get('Email');\nconst firstName = get('First Name');\n\nif (!email)     throw new Error('Missing email');\nif (!firstName) throw new Error('Missing first name');\n\nreturn [{\n  json: {\n    firstName:  firstName,\n    lastName:   get('Last Name'),\n    email:      email,\n    phone:      get('Phone Number'),\n    intentRaw:  get('I want to...'),\n    budgetRaw:  get('Budget range'),\n    area:       get('Area of Interest')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        -384
+      ],
+      "id": "ddabcf6d-97e4-4f67-b628-85996d8f9f30",
+      "name": "✅ Validate Fields",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-3-flash-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a real estate lead classifier.\n\nA lead just submitted this form data:\n{{ JSON.stringify($input.first().json) }}\n\nExtract and return ONLY this JSON:\n{\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"email\": \"\",\n  \"phone\": \"\",\n  \"leadType\": \"buyer or seller or renter\",\n  \"budget\": \"\",\n  \"area\": \"\"\n}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        -384
+      ],
+      "id": "f4533db9-3c90-4a83-a3d5-845f717191e8",
+      "name": "🤖 AI Classifier",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "xy7hqkrCbOlq0R1a",
+          "name": "Google Gemini(PaLM) Api account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.first().json.content.parts[0].text;\n\n// Clean markdown fences if any\nconst cleaned = rawText\n  .replace(/```json\\n?/g, '')\n  .replace(/```/g, '')\n  .trim();\n\nconst ai = JSON.parse(cleaned);\n\nreturn [{\n  json: {\n    firstName:  ai.firstName,\n    lastName:   ai.lastName,\n    email:      ai.email,\n    phone:      ai.phone,\n    leadType:   ai.leadType,   // \"buyer\" / \"seller\" / \"renter\"\n    budget:     ai.budget,\n    area:       ai.area\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -384
+      ],
+      "id": "22c3a4d8-0dab-4273-b5bc-9948456a36c9",
+      "name": "📦 Extract Requirements",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "lead",
+                "value": "={{ $json.leadType }}"
+              },
+              {
+                "property": "budget_range",
+                "value": "={{ $json.budget }}"
+              },
+              {
+                "property": "preferred_area",
+                "value": "={{ $json.area }}"
+              }
+            ]
+          },
+          "firstName": "={{ $json.firstName }}",
+          "lastName": "={{ $json.lastName }}",
+          "leadStatus": "NEW",
+          "lifeCycleStage": "lead",
+          "phoneNumber": "={{ $json.phone }}"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        -384
+      ],
+      "id": "eefb6f41-64e1-427c-8f43-cbcc5a487310",
+      "name": "🏠 HubSpot — Save Lead",
+      "retryOnFail": true,
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "ioFNTtEU7XHVyZLN",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "tirthomoj@gmail.com",
+        "subject": "=🏠 New Lead: {{ $('📦 Extract Requirements').item.json.firstName }} {{ $('📦 Extract Requirements').item.json.lastName }}",
+        "emailType": "text",
+        "message": "=New real estate lead received!  Name: {{ $('📦 Extract Requirements').item.json.firstName }} {{ $('📦 Extract Requirements').item.json.lastName }} Email: {{ $('📦 Extract Requirements').item.json.email }} Phone: {{ $('📦 Extract Requirements').item.json.phone }} Type: {{ $('📦 Extract Requirements').item.json.leadType }} Budget: {{ $('📦 Extract Requirements').item.json.budget }} Area: {{ $('📦 Extract Requirements').item.json.area }} ✅ Contact added to HubSpot.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        -384
+      ],
+      "id": "a01ec213-963f-4adf-92cc-3fd27d0958ab",
+      "name": "📧 Gmail — Notify Agent",
+      "webhookId": "069ac821-fb61-4d66-b831-9d993d4f668e",
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iqkC2aAcW2qbjEOW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0CHPUH7A4S",
+          "mode": "list",
+          "cachedResultName": "real-estate-leads"
+        },
+        "text": "=🏠 *New Lead Alert!*\n\n*Name:* {{ $('📦 Extract Requirements').first().json.firstName }} {{ $('📦 Extract Requirements').first().json.lastName }}\n*Email:* {{ $('📦 Extract Requirements').first().json.email }}\n*Phone:* {{ $('📦 Extract Requirements').first().json.phone }}\n*Type:* {{ $('📦 Extract Requirements').first().json.leadType }}\n*Budget:* {{ $('📦 Extract Requirements').first().json.budget }}\n*Area:* {{ $('📦 Extract Requirements').first().json.area }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        1344,
+        -384
+      ],
+      "id": "3c4e8ddb-a2f3-4f28-8ce8-71541c7b5bcf",
+      "name": "💬 Slack — Notify Agent",
+      "webhookId": "fe79f43c-7488-4636-9ef3-a6e1f5ac1b5f",
+      "retryOnFail": true,
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "U1Tchg9SlaKO271D",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "tirthomoj@gmail.com",
+        "subject": "=Thanks for your inquiry, {{ $('📦 Extract Requirements').first().json.firstName }}!",
+        "emailType": "text",
+        "message": "=Hi {{ $('📦 Extract Requirements').first().json.firstName }},  Thank you for reaching out! We received your property inquiry and  will be in touch shortly.  Here's a summary of what you submitted: - Type: {{ $('📦 Extract Requirements').first().json.leadType }} - Budget: {{ $('📦 Extract Requirements').first().json.budget }} - Area: {{ $('📦 Extract Requirements').first().json.area }}  We'll contact you within 24 hours.  Best regards, Real Estate Team",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        -384
+      ],
+      "id": "276c3b7d-148a-44d6-b6e7-d2cc8658b3c9",
+      "name": "📧 Gmail — Day 0 Ack",
+      "webhookId": "93dfe0c5-d6c4-44ab-a954-a628e438be68",
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iqkC2aAcW2qbjEOW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1792,
+        -384
+      ],
+      "id": "34b46ff0-8173-49c1-96bf-c9b41b5ccf2e",
+      "name": "⏳ Wait 2 Days",
+      "webhookId": "43fbc3e8-da42-4d27-88ee-9544a96d08a3",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "d37d974c-300d-46bd-b990-e9872c5e8b2f",
+              "leftValue": "={{ $('🏠 HubSpot — Save Lead').first().json.properties.hs_lead_status.value }}",
+              "rightValue": "CONNECTED",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2016,
+        -384
+      ],
+      "id": "56202027-9ed1-4ba7-afae-89c7a1b6e799",
+      "name": "🔀 Check Lead Status",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('📦 Extract Requirements').first().json.email }}",
+        "subject": "=Still looking for a property, {{ $('📦 Extract Requirements').first().json.firstName }}?",
+        "emailType": "text",
+        "message": "=Hi {{ $('📦 Extract Requirements').first().json.firstName }},  Just following up on your property inquiry.  We have some great options matching your criteria: - Budget: {{ $('📦 Extract Requirements').first().json.budget }} - Area: {{ $('📦 Extract Requirements').first().json.area }}  Would you like to book a quick call?  Best regards, Real Estate Team",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        -384
+      ],
+      "id": "189d1bf5-ed94-47a8-a9dd-7cede756d4a8",
+      "name": "📧 Gmail — Day 2 Nudge",
+      "webhookId": "53af5718-b337-4fa7-b310-7a99dc8e4761",
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iqkC2aAcW2qbjEOW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2464,
+        -384
+      ],
+      "id": "1cbf6fb6-f86a-465b-a0bd-2c1d3d6200ed",
+      "name": "⏳ Wait 2 More Days",
+      "webhookId": "fc3834d0-2d63-4867-b874-b8831dfc3e98",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "19109eaf-59a6-4b68-a9f9-2fbc30b5ad6e",
+              "leftValue": "={{ $('🏠 HubSpot — Save Lead').first().json.properties.hs_lead_status.value }}",
+              "rightValue": "CONNECTED",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2688,
+        -384
+      ],
+      "id": "e7e4bf5a-5588-4e27-b801-129f86773d9a",
+      "name": "🔀 Check Lead Status 2",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('📦 Extract Requirements').first().json.email }}",
+        "subject": "=Last follow-up — {{ $('📦 Extract Requirements').first().json.firstName }}",
+        "emailType": "text",
+        "message": "=Hi {{ $('📦 Extract Requirements').first().json.firstName }},\n\nThis is our final follow-up regarding your property inquiry.\n\nIf you're still interested, we'd love to help you find \nthe perfect property in {{ $('📦 Extract Requirements').first().json.area }} \nwithin your budget of {{ $('📦 Extract Requirements').first().json.budget }}.\n\nBook a free consultation here:\nhttps://calendly.com/omimojumdar88/30min\n\nBest regards,\nReal Estate Team",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        -384
+      ],
+      "id": "0f9012b2-e1b2-48d0-94e3-2f32de41f18d",
+      "name": "📧 Gmail — Day 4 Final",
+      "webhookId": "2a0f1014-526b-40f4-810f-f1a80bfd4085",
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "iqkC2aAcW2qbjEOW",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Booking",
+        "height": 304,
+        "width": 1024,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1024,
+        -64
+      ],
+      "typeVersion": 1,
+      "id": "29e9d250-ae46-427b-ac50-7fa71a43eefa",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# 🏠 Real Estate Lead Automation\n## Capture → Qualify → Notify → Follow Up",
+        "height": 400,
+        "width": 3376,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -224,
+        -528
+      ],
+      "typeVersion": 1,
+      "id": "8aadbd4f-9498-4284-a86b-44f87cd245f5",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "📅 Booking Received": {
+      "main": [
+        [
+          {
+            "node": "📧 Gmail — Confirm Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Gmail — Confirm Booking": {
+      "main": [
+        [
+          {
+            "node": "💬 Slack — Booking Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Slack — Booking Alert": {
+      "main": [
+        [
+          {
+            "node": "🏠 HubSpot — Mark Connected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Lead Capture": {
+      "main": [
+        [
+          {
+            "node": "✅ Validate Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Validate Fields": {
+      "main": [
+        [
+          {
+            "node": "🤖 AI Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 AI Classifier": {
+      "main": [
+        [
+          {
+            "node": "📦 Extract Requirements",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📦 Extract Requirements": {
+      "main": [
+        [
+          {
+            "node": "🏠 HubSpot — Save Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🏠 HubSpot — Save Lead": {
+      "main": [
+        [
+          {
+            "node": "📧 Gmail — Notify Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Gmail — Notify Agent": {
+      "main": [
+        [
+          {
+            "node": "💬 Slack — Notify Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Slack — Notify Agent": {
+      "main": [
+        [
+          {
+            "node": "📧 Gmail — Day 0 Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Gmail — Day 0 Ack": {
+      "main": [
+        [
+          {
+            "node": "⏳ Wait 2 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Wait 2 Days": {
+      "main": [
+        [
+          {
+            "node": "🔀 Check Lead Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Check Lead Status": {
+      "main": [
+        [
+          {
+            "node": "📧 Gmail — Day 2 Nudge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📧 Gmail — Day 2 Nudge": {
+      "main": [
+        [
+          {
+            "node": "⏳ Wait 2 More Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Wait 2 More Days": {
+      "main": [
+        [
+          {
+            "node": "🔀 Check Lead Status 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Check Lead Status 2": {
+      "main": [
+        [
+          {
+            "node": "📧 Gmail — Day 4 Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d5ab31e8-d689-480f-be5d-70e572ddc6f9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0b4c464bd30ffc0e1cfc46638c54d90aae96f20773fc2162ec29ba9f04b7a5c2"
+  },
+  "nodeGroups": [],
+  "id": "ei6IftkUvs74kwN4",
+  "tags": []
+}
